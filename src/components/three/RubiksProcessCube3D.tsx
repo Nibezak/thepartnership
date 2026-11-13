@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 interface RubiksProcessCube3DProps {
   activeStep: number;
@@ -16,7 +15,7 @@ interface CubeMove {
   dir: 1 | -1;
 }
 
-// 8 deterministic quarter-turn moves that visibly scramble every face and unwind smoothly to SOLVED at Stage 04
+// 8 deterministic quarter-turn moves that scramble cleanly and unwind to SOLVED at Stage 04
 const SCRAMBLE_MOVES: CubeMove[] = [
   { axis: 'y', layer: 1, dir: 1 },
   { axis: 'x', layer: 1, dir: -1 },
@@ -34,7 +33,7 @@ function detectSoftwareGl(renderer: THREE.WebGLRenderer): boolean {
     const dbg = gl.getExtension('WEBGL_debug_renderer_info');
     if (!dbg) return false;
     const str = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
-    return /SwiftShader|llvmpipe|mesa|softpipe/i.test(str);
+    return /SwiftShader|llvmpipe|mesa|softpipe|Software/i.test(str);
   } catch {
     return false;
   }
@@ -58,21 +57,21 @@ const FACE_SPECS: Record<string, FaceSpec> = {
   pz: {
     bg: '#FFCD06',
     accent: '#30261D',
-    ink: '#30261D',
+    ink: '#231B14',
     label: 'WE > ME',
     sublabel: 'THE PARTNERSHIP',
     motif: 'ripples',
   },
   px: {
     bg: '#FAF5E6',
-    accent: '#1DB954',
-    ink: '#30261D',
+    accent: '#1E7E45',
+    ink: '#231B14',
     label: 'CULTURE',
     sublabel: 'SPOTIFY · INDAHASH',
     motif: 'diamond',
   },
   py: {
-    bg: '#D92323',
+    bg: '#C93B2B',
     accent: '#FFCD06',
     ink: '#FAF5E6',
     label: 'IMAGINE',
@@ -88,7 +87,7 @@ const FACE_SPECS: Record<string, FaceSpec> = {
     motif: 'stripes',
   },
   ny: {
-    bg: '#30261D',
+    bg: '#382B1E',
     accent: '#FFCD06',
     ink: '#FFCD06',
     label: 'GO AHEAD',
@@ -105,26 +104,28 @@ const FACE_SPECS: Record<string, FaceSpec> = {
   },
 };
 
-function createFaceMasterTexture(spec: FaceSpec): THREE.CanvasTexture {
+function createFaceRetroTexture(spec: FaceSpec, maxAniso: number): THREE.CanvasTexture {
   const size = 512;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
+  // Matte vintage paper fill
   ctx.fillStyle = spec.bg;
   ctx.fillRect(0, 0, size, size);
 
   const cx = size / 2;
   const cy = size / 2;
 
+  // Graphic retro print motif
   ctx.save();
   if (spec.motif === 'ripples' || spec.motif === 'lion') {
-    for (let r = 230; r >= 45; r -= 38) {
+    for (let r = 232; r >= 48; r -= 38) {
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.strokeStyle = spec.accent;
-      ctx.globalAlpha = 0.22;
+      ctx.globalAlpha = 0.24;
       ctx.lineWidth = 4;
       ctx.stroke();
     }
@@ -134,13 +135,10 @@ function createFaceMasterTexture(spec: FaceSpec): THREE.CanvasTexture {
     ctx.strokeStyle = spec.accent;
     ctx.lineWidth = 6;
     ctx.strokeRect(-72, -72, 144, 144);
-    ctx.fillStyle = spec.accent;
-    ctx.globalAlpha = 0.14;
-    ctx.fillRect(-52, -52, 104, 104);
   } else if (spec.motif === 'diamond') {
     ctx.strokeStyle = spec.accent;
     ctx.lineWidth = 10;
-    ctx.globalAlpha = 0.25;
+    ctx.globalAlpha = 0.28;
     for (let s = 120; s <= 380; s += 85) {
       ctx.save();
       ctx.translate(cx, cy);
@@ -151,7 +149,7 @@ function createFaceMasterTexture(spec: FaceSpec): THREE.CanvasTexture {
   } else if (spec.motif === 'ring') {
     ctx.strokeStyle = spec.accent;
     ctx.lineWidth = 14;
-    ctx.globalAlpha = 0.3;
+    ctx.globalAlpha = 0.34;
     ctx.beginPath();
     ctx.arc(cx, cy, 165, 0, Math.PI * 2);
     ctx.stroke();
@@ -160,7 +158,7 @@ function createFaceMasterTexture(spec: FaceSpec): THREE.CanvasTexture {
     ctx.stroke();
   } else if (spec.motif === 'stripes') {
     ctx.fillStyle = spec.accent;
-    ctx.globalAlpha = 0.16;
+    ctx.globalAlpha = 0.18;
     for (let i = -size; i < size * 2; i += 64) {
       ctx.save();
       ctx.translate(i, 0);
@@ -170,7 +168,7 @@ function createFaceMasterTexture(spec: FaceSpec): THREE.CanvasTexture {
     }
   } else {
     ctx.strokeStyle = spec.accent;
-    ctx.globalAlpha = 0.25;
+    ctx.globalAlpha = 0.28;
     ctx.lineWidth = 4;
     for (let i = 0; i <= 3; i++) {
       const p = (i * size) / 3;
@@ -186,19 +184,32 @@ function createFaceMasterTexture(spec: FaceSpec): THREE.CanvasTexture {
   }
   ctx.restore();
 
+  // Tactile retro halftone print grain across the paper surface
+  ctx.save();
+  ctx.fillStyle = spec.ink;
+  ctx.globalAlpha = 0.045;
+  for (let y = 6; y < size; y += 12) {
+    for (let x = (y % 24 === 6 ? 6 : 12); x < size; x += 12) {
+      ctx.fillRect(x, y, 2, 2);
+    }
+  }
+  ctx.restore();
+
+  // Cell inset stamp framing (3x3 tile rules)
   const cell = size / 3;
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 3; col++) {
       const x = col * cell;
       const y = row * cell;
       ctx.strokeStyle = spec.ink;
-      ctx.globalAlpha = 0.35;
-      ctx.lineWidth = 4;
+      ctx.globalAlpha = 0.42;
+      ctx.lineWidth = 4.5;
       ctx.strokeRect(x + 8, y + 8, cell - 16, cell - 16);
     }
   }
   ctx.globalAlpha = 1;
 
+  // Bold stamped face wordmark & subtitle
   ctx.fillStyle = spec.ink;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -206,13 +217,40 @@ function createFaceMasterTexture(spec: FaceSpec): THREE.CanvasTexture {
   ctx.fillText(spec.label, cx, cy - 12);
 
   ctx.font = '700 22px "IBM Plex Mono", monospace';
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.88;
   ctx.fillText(spec.sublabel, cx, cy + 40);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = Math.min(8, maxAniso);
+  tex.needsUpdate = true;
   return tex;
+}
+
+function createRoundedTileGeometry(w: number, h: number, depth: number): THREE.ExtrudeGeometry {
+  const hw = w * 0.5;
+  const hh = h * 0.5;
+  const r = 0.075;
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw + r, -hh);
+  shape.lineTo(hw - r, -hh);
+  shape.quadraticCurveTo(hw, -hh, hw, -hh + r);
+  shape.lineTo(hw, hh - r);
+  shape.quadraticCurveTo(hw, hh, hw - r, hh);
+  shape.lineTo(-hw + r, hh);
+  shape.quadraticCurveTo(-hw, hh, -hw, hh - r);
+  shape.lineTo(-hw, -hh + r);
+  shape.quadraticCurveTo(-hw, -hh, -hw + r, -hh);
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: 0.012,
+    bevelSize: 0.012,
+    bevelSegments: 2,
+  });
+  geo.center();
+  return geo;
 }
 
 function makeSubTileGeometry(w: number, h: number, col: number, row: number): THREE.PlaneGeometry {
@@ -222,10 +260,10 @@ function makeSubTileGeometry(w: number, h: number, col: number, row: number): TH
   const u1 = (col + 1) / 3;
   const v1 = 1 - row / 3;
   const v0 = 1 - (row + 1) / 3;
-  uv.setXY(0, u0 + 0.004, v1 - 0.004);
-  uv.setXY(1, u1 - 0.004, v1 - 0.004);
-  uv.setXY(2, u0 + 0.004, v0 + 0.004);
-  uv.setXY(3, u1 - 0.004, v0 + 0.004);
+  uv.setXY(0, u0 + 0.005, v1 - 0.005);
+  uv.setXY(1, u1 - 0.005, v1 - 0.005);
+  uv.setXY(2, u0 + 0.005, v0 + 0.005);
+  uv.setXY(3, u1 - 0.005, v0 + 0.005);
   uv.needsUpdate = true;
   return geo;
 }
@@ -265,49 +303,54 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
       powerPreference: 'high-performance',
     });
     const isSoftwareGl = detectSoftwareGl(renderer);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isSoftwareGl ? 1 : 2));
+    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(width, height);
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    // Linear/NoToneMapping keeps vintage print inks saturated & strictly non-glossy
+    renderer.toneMapping = THREE.NoToneMapping;
     renderer.domElement.style.display = 'block';
     renderer.domElement.style.cursor = 'grab';
     renderer.domElement.style.touchAction = 'none';
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
+    // Explicitly NO RoomEnvironment / scene.environment -> ZERO reflections!
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 40);
-    camera.position.set(0, 0.25, 7.0);
+    const camera = new THREE.PerspectiveCamera(37, width / height, 0.1, 40);
+    camera.position.set(0, 0.25, 7.45);
     camera.lookAt(0, 0, 0);
 
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const roomEnv = new RoomEnvironment();
-    const envTarget = pmrem.fromScene(roomEnv, 0.04);
-    scene.environment = envTarget.texture;
-    roomEnv.dispose();
-
-    const keyLight = new THREE.DirectionalLight('#FFF3D1', 2.4);
-    keyLight.position.set(4.5, 6.2, 5.5);
+    // Pure diffuse 3-point warm retro studio light rig (no harsh specular bounce)
+    const keyLight = new THREE.DirectionalLight('#FFF6DC', 1.35);
+    keyLight.position.set(4.5, 6.2, 5.8);
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight('#FFCD06', 1.45);
-    rimLight.position.set(-5.0, -3.5, -4.0);
+    const rimLight = new THREE.DirectionalLight('#FFCD06', 0.65);
+    rimLight.position.set(-5.0, -3.0, -4.0);
     scene.add(rimLight);
 
-    const hemiLight = new THREE.HemisphereLight('#FAF5E6', '#1F1812', 0.9);
+    const hemiLight = new THREE.HemisphereLight('#FAF5E6', '#3A2C1E', 1.05);
     scene.add(hemiLight);
+
+    // 3-step discrete cel/toon gradient map for tactile retro comic/print 3D shading
+    const toonBands = new Uint8Array([155, 210, 255]);
+    const toonGradient = new THREE.DataTexture(toonBands, 3, 1, THREE.RedFormat);
+    toonGradient.minFilter = THREE.NearestFilter;
+    toonGradient.magFilter = THREE.NearestFilter;
+    toonGradient.generateMipmaps = false;
+    toonGradient.needsUpdate = true;
 
     const cubeRig = new THREE.Group();
     scene.add(cubeRig);
 
-    const haloRing1Geo = new THREE.TorusGeometry(2.85, 0.016, 12, 96);
-    const haloRing2Geo = new THREE.TorusGeometry(3.35, 0.012, 12, 96);
+    // Tactile matte dashed / segmented blueprint orbital rings
+    const haloRing1Geo = new THREE.TorusGeometry(2.85, 0.018, 10, 84);
+    const haloRing2Geo = new THREE.TorusGeometry(3.32, 0.013, 10, 84);
     const haloMat = new THREE.MeshBasicMaterial({
       color: '#FFCD06',
       transparent: true,
-      opacity: 0.24,
+      opacity: 0.28,
     });
     const haloRing1 = new THREE.Mesh(haloRing1Geo, haloMat);
     const haloRing2 = new THREE.Mesh(haloRing2Geo, haloMat);
@@ -315,37 +358,69 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
     haloRing2.rotation.x = -Math.PI * 0.32;
     scene.add(haloRing1, haloRing2);
 
-    const coreMat = new THREE.MeshStandardMaterial({
-      color: '#19130E',
-      metalness: 0.25,
-      roughness: 0.55,
+    // Non-reflective matte Bakelite cubelet chassis & raised vintage backing tiles
+    const coreMat = new THREE.MeshLambertMaterial({
+      color: '#1D150F',
+    });
+    const bezelMat = new THREE.MeshLambertMaterial({
+      color: '#2B2017',
     });
     const edgeWireMat = new THREE.LineBasicMaterial({
-      color: '#5C4A2B',
+      color: '#6C5430',
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.65,
     });
 
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
     const faceTextures: Record<string, THREE.CanvasTexture> = {};
-    const faceMaterials: Record<string, THREE.MeshStandardMaterial> = {};
+    const faceMaterials: Record<string, THREE.MeshToonMaterial> = {};
     Object.entries(FACE_SPECS).forEach(([key, spec]) => {
-      const tex = createFaceMasterTexture(spec);
+      const tex = createFaceRetroTexture(spec, maxAniso);
       faceTextures[key] = tex;
-      faceMaterials[key] = new THREE.MeshStandardMaterial({
+      faceMaterials[key] = new THREE.MeshToonMaterial({
         map: tex,
-        roughness: 0.26,
-        metalness: 0.08,
+        gradientMap: toonGradient,
       });
     });
 
-    const coreGeo = new THREE.BoxGeometry(0.92, 0.92, 0.92);
-    const coreEdgeGeo = new THREE.EdgesGeometry(coreGeo);
-    const disposablesGeo: THREE.BufferGeometry[] = [coreGeo, coreEdgeGeo, haloRing1Geo, haloRing2Geo];
+    const coreGeo = createRoundedTileGeometry(0.9, 0.9, 0.88);
+    const coreEdgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.92, 0.92, 0.92));
+    const plaqueGeo = createRoundedTileGeometry(0.84, 0.84, 0.025);
+    const disposablesGeo: THREE.BufferGeometry[] = [
+      coreGeo,
+      coreEdgeGeo,
+      plaqueGeo,
+      haloRing1Geo,
+      haloRing2Geo,
+    ];
 
     const SPACING = 1.02;
-    const STICKER_OFFSET = 0.464;
-    const STICKER_SIZE = 0.84;
+    const PLAQUE_OFFSET = 0.456;
+    const STICKER_OFFSET = 0.483;
+    const STICKER_SIZE = 0.8;
     const cubelets: CubeletRecord[] = [];
+
+    const addStickerSide = (
+      cGroup: THREE.Group,
+      mat: THREE.Material,
+      col: number,
+      row: number,
+      pos: [number, number, number],
+      plaquePos: [number, number, number],
+      rot: [number, number, number]
+    ) => {
+      const plaque = new THREE.Mesh(plaqueGeo, bezelMat);
+      plaque.position.set(plaquePos[0], plaquePos[1], plaquePos[2]);
+      plaque.rotation.set(rot[0], rot[1], rot[2]);
+      cGroup.add(plaque);
+
+      const g = makeSubTileGeometry(STICKER_SIZE, STICKER_SIZE, col, row);
+      disposablesGeo.push(g);
+      const sticker = new THREE.Mesh(g, mat);
+      sticker.position.set(pos[0], pos[1], pos[2]);
+      sticker.rotation.set(rot[0], rot[1], rot[2]);
+      cGroup.add(sticker);
+    };
 
     const coords: (-1 | 0 | 1)[] = [-1, 0, 1];
     for (const ix of coords) {
@@ -357,51 +432,70 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
           cGroup.add(core, edges);
 
           if (iz === 1) {
-            const g = makeSubTileGeometry(STICKER_SIZE, STICKER_SIZE, ix + 1, 1 - iy);
-            disposablesGeo.push(g);
-            const m = new THREE.Mesh(g, faceMaterials.pz);
-            m.position.z = STICKER_OFFSET;
-            cGroup.add(m);
+            addStickerSide(
+              cGroup,
+              faceMaterials.pz,
+              ix + 1,
+              1 - iy,
+              [0, 0, STICKER_OFFSET],
+              [0, 0, PLAQUE_OFFSET],
+              [0, 0, 0]
+            );
           }
           if (iz === -1) {
-            const g = makeSubTileGeometry(STICKER_SIZE, STICKER_SIZE, 1 - ix, 1 - iy);
-            disposablesGeo.push(g);
-            const m = new THREE.Mesh(g, faceMaterials.nz);
-            m.position.z = -STICKER_OFFSET;
-            m.rotation.y = Math.PI;
-            cGroup.add(m);
+            addStickerSide(
+              cGroup,
+              faceMaterials.nz,
+              1 - ix,
+              1 - iy,
+              [0, 0, -STICKER_OFFSET],
+              [0, 0, -PLAQUE_OFFSET],
+              [0, Math.PI, 0]
+            );
           }
           if (ix === 1) {
-            const g = makeSubTileGeometry(STICKER_SIZE, STICKER_SIZE, 1 - iz, 1 - iy);
-            disposablesGeo.push(g);
-            const m = new THREE.Mesh(g, faceMaterials.px);
-            m.position.x = STICKER_OFFSET;
-            m.rotation.y = Math.PI / 2;
-            cGroup.add(m);
+            addStickerSide(
+              cGroup,
+              faceMaterials.px,
+              1 - iz,
+              1 - iy,
+              [STICKER_OFFSET, 0, 0],
+              [PLAQUE_OFFSET, 0, 0],
+              [0, Math.PI / 2, 0]
+            );
           }
           if (ix === -1) {
-            const g = makeSubTileGeometry(STICKER_SIZE, STICKER_SIZE, iz + 1, 1 - iy);
-            disposablesGeo.push(g);
-            const m = new THREE.Mesh(g, faceMaterials.nx);
-            m.position.x = -STICKER_OFFSET;
-            m.rotation.y = -Math.PI / 2;
-            cGroup.add(m);
+            addStickerSide(
+              cGroup,
+              faceMaterials.nx,
+              iz + 1,
+              1 - iy,
+              [-STICKER_OFFSET, 0, 0],
+              [-PLAQUE_OFFSET, 0, 0],
+              [0, -Math.PI / 2, 0]
+            );
           }
           if (iy === 1) {
-            const g = makeSubTileGeometry(STICKER_SIZE, STICKER_SIZE, ix + 1, iz + 1);
-            disposablesGeo.push(g);
-            const m = new THREE.Mesh(g, faceMaterials.py);
-            m.position.y = STICKER_OFFSET;
-            m.rotation.x = -Math.PI / 2;
-            cGroup.add(m);
+            addStickerSide(
+              cGroup,
+              faceMaterials.py,
+              ix + 1,
+              iz + 1,
+              [0, STICKER_OFFSET, 0],
+              [0, PLAQUE_OFFSET, 0],
+              [-Math.PI / 2, 0, 0]
+            );
           }
           if (iy === -1) {
-            const g = makeSubTileGeometry(STICKER_SIZE, STICKER_SIZE, ix + 1, 1 - iz);
-            disposablesGeo.push(g);
-            const m = new THREE.Mesh(g, faceMaterials.ny);
-            m.position.y = -STICKER_OFFSET;
-            m.rotation.x = Math.PI / 2;
-            cGroup.add(m);
+            addStickerSide(
+              cGroup,
+              faceMaterials.ny,
+              ix + 1,
+              1 - iz,
+              [0, -STICKER_OFFSET, 0],
+              [0, -PLAQUE_OFFSET, 0],
+              [Math.PI / 2, 0, 0]
+            );
           }
 
           const homePos = new THREE.Vector3(ix * SPACING, iy * SPACING, iz * SPACING);
@@ -417,7 +511,6 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
     const pointerTarget = new THREE.Vector2(0, 0);
     const pointerSmooth = new THREE.Vector2(0, 0);
 
-    // Direct user drag-to-orbit + tap/click-to-step interaction
     let isDragging = false;
     let dragDistance = 0;
     let lastClientX = 0;
@@ -436,7 +529,7 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
       try {
         renderer.domElement.setPointerCapture(e.pointerId);
       } catch {
-        // ignore if unsupported
+        // ignore
       }
     };
 
@@ -470,7 +563,6 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
       } catch {
         // ignore
       }
-      // Clean tap / click (< 6px drag) directly advances/solves the cube step
       if (dragDistance < 6 && onStepAdvanceRef.current) {
         onStepAdvanceRef.current();
       }
@@ -580,7 +672,7 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
       }
       const gl = renderer.getContext();
       gl.finish();
-      rafId = requestAnimationFrame(() => setTimeout(cb, 16));
+      rafId = requestAnimationFrame(() => setTimeout(cb, 80));
     };
 
     const tick = () => {
@@ -650,11 +742,11 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
       disposablesGeo.forEach((g) => g.dispose());
       Object.values(faceTextures).forEach((t) => t.dispose());
       Object.values(faceMaterials).forEach((m) => m.dispose());
+      toonGradient.dispose();
       coreMat.dispose();
+      bezelMat.dispose();
       edgeWireMat.dispose();
       haloMat.dispose();
-      envTarget.dispose();
-      pmrem.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === host) {
         host.removeChild(renderer.domElement);
@@ -666,7 +758,7 @@ export const RubiksProcessCube3D: React.FC<RubiksProcessCube3DProps> = ({
     <div
       ref={hostRef}
       style={{ width: '100%', height: '100%', position: 'relative' }}
-      aria-label="Interactive 3D Rubik's Cube — drag to rotate or click to step through stages"
+      aria-label="Interactive matte retro 3D Rubik's Cube — drag to rotate or click to step through stages"
     />
   );
 };

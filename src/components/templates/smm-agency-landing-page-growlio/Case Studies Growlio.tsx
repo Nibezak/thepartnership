@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, useScroll, useTransform, useMotionValueEvent, useMotionValue, animate } from 'framer-motion';
+import { motion, useScroll, useMotionValueEvent, useMotionValue, animate } from 'framer-motion';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import spotifyPhoto from '../../../assets/images/campaign_spotify_culture_1794516064451.jpg';
 import airtelPhoto from '../../../assets/images/campaign_airtel_mobile_1794516064598.jpg';
 import kcbPhoto from '../../../assets/images/campaign_kcb_tusker_1794516063709.jpg';
@@ -20,18 +21,20 @@ const AnimatedMetric = ({ metric, index, studyIndex }: { metric: string; index: 
     const value = parseInt(match[2], 10);
     const suffix = match[3];
     const count = useMotionValue(0);
-    const rounded = useTransform(count, Math.round);
+    const rounded = useMotionValue(0);
 
     useEffect(() => {
+      const unsub = count.on('change', (v) => rounded.set(Math.round(v)));
       count.set(0);
       const timeout = setTimeout(() => {
-        animate(count, value, { duration: 0.9, ease: 'easeOut' });
-      }, 60 + index * 80);
+        animate(count, value, { duration: 0.85, ease: 'easeOut' });
+      }, 60 + index * 75);
       return () => {
         clearTimeout(timeout);
         count.stop();
+        unsub();
       };
-    }, [value, index, studyIndex, count]);
+    }, [value, index, studyIndex, count, rounded]);
 
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
@@ -48,10 +51,8 @@ const AnimatedMetric = ({ metric, index, studyIndex }: { metric: string; index: 
 interface StudyRecord extends MonolithCampaignItem {
   name: string;
   brand: BrandKey;
-  photo: string;
   description: string;
   metrics: string[];
-  partners: string[];
 }
 
 const CASE_STUDIES_DATA: StudyRecord[] = [
@@ -65,9 +66,8 @@ const CASE_STUDIES_DATA: StudyRecord[] = [
     headline: 'Street Sound & Creator Culture',
     photo: spotifyPhoto,
     description:
-      'Translating East Africa’s breakout street sound into daily cultural habit across Kenya, Uganda, and Tanzania through Indahash creator coalitions and live campus activations.',
+      'Turning East Africa’s breakout sound into daily cultural habit across Kenya, Uganda, and Tanzania with Indahash creator coalitions.',
     metrics: ['100M+ - Reel Views', '3x - Creator Lift', '4 - EA Markets'],
-    partners: ['Publicis Groupe', 'Indahash', 'Yellow Agency'],
   },
   {
     name: 'Airtel Africa',
@@ -79,9 +79,8 @@ const CASE_STUDIES_DATA: StudyRecord[] = [
     headline: 'A Reason to Imagine Across 4 Markets',
     photo: airtelPhoto,
     description:
-      'A unified regional brand system connecting Airtel data speed and mobile money with everyday ambition across East Africa—backed by Publicis Groupe Africa scale.',
+      'A unified regional system connecting Airtel data speed and mobile money with everyday ambition—backed by Publicis Groupe Africa.',
     metrics: ['+42% - Brand Recall', '12+ - Touchpoints', '360° - TTL Reach'],
-    partners: ['Publicis Groupe', 'TDF Group', 'P&L Consulting'],
   },
   {
     name: 'KCB Group',
@@ -93,9 +92,8 @@ const CASE_STUDIES_DATA: StudyRecord[] = [
     headline: 'Human-First Financial Storytelling',
     photo: teamPhoto,
     description:
-      'Turning retail banking, MSME lending, and digital finance into relatable stories rooted in street truth, driving human warmth alongside institutional trust.',
-    metrics: ['8M+ - Regional Reach', '64% - Completion Rate', '5x - Digital Leads'],
-    partners: ['Publicis Groupe', 'P&L Consulting'],
+      'Translating retail banking, MSME lending, and digital finance into relatable stories rooted in everyday street ambition.',
+    metrics: ['8M+ - Regional Reach', '64% - Completion', '5x - Digital Leads'],
   },
   {
     name: 'Diageo · Tusker',
@@ -107,9 +105,8 @@ const CASE_STUDIES_DATA: StudyRecord[] = [
     headline: 'From Stadium Anthems to On-Trade',
     photo: kcbPhoto,
     description:
-      'Through-the-line creative platforms linking broadcast anthems, stadium sports energy, festival experiences, and on-trade activation across East Africa.',
+      'Through-the-line creative platforms linking broadcast anthems, stadium energy, and live on-trade activation across East Africa.',
     metrics: ['250+ - Activated Venues', '91% - Brief Alignment', '100+ - Yrs Craft'],
-    partners: ['Publicis Groupe', 'Yellow Agency', 'TDF Group'],
   },
   {
     name: 'Isuzu',
@@ -119,10 +116,9 @@ const CASE_STUDIES_DATA: StudyRecord[] = [
     metric: '+185% Lift',
     accentHex: '#FFCD06',
     headline: 'Built for East African Terrain',
-    photo: spotifyPhoto,
+    photo: '/assets/partnership/_Leadership_New_mid.jpg',
     description: '',
     metrics: ['+185% - Engagement', '4 - EA Markets', '360° - TTL'],
-    partners: [],
   },
 ];
 
@@ -142,6 +138,7 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
   const [activeStudyIndex, setActiveStudyIndex] = useState(0);
   const [scrollProg, setScrollProg] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+
   const isMobile = viewportWidth <= 768;
   const isCompact = viewportWidth <= 1024;
 
@@ -160,8 +157,11 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
     setScrollProg(v);
   });
 
-  const parallaxY = useTransform(scrollYProgress, [0, 1], [32, -32]);
   const activeData = CASE_STUDIES_DATA[activeStudyIndex];
+  const stepPrev = () =>
+    setActiveStudyIndex((i) => (i - 1 + CASE_STUDIES_DATA.length) % CASE_STUDIES_DATA.length);
+  const stepNext = () =>
+    setActiveStudyIndex((i) => (i + 1) % CASE_STUDIES_DATA.length);
 
   return (
     <section
@@ -172,7 +172,7 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
         backgroundColor: '#FAF5E6',
         borderTop: '2px solid #30261D',
         borderBottom: '2px solid #30261D',
-        padding: isMobile ? '64px 20px' : '96px 40px',
+        padding: isMobile ? '56px 16px' : '88px 36px',
         boxSizing: 'border-box',
         overflow: 'hidden',
       }}
@@ -181,25 +181,30 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
         @keyframes scrollMarqueeSquare { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
       `}</style>
 
-      <div style={{ maxWidth: '1320px', margin: '0 auto' }}>
-        {/* Header Band */}
+      <div style={{ maxWidth: '1360px', margin: '0 auto' }}>
+        {/* Clean Editorial Header + Rounded Pill Client Switcher */}
         <div
           style={{
             display: 'flex',
-            flexDirection: isMobile ? 'column' : 'row',
-            justifyContent: 'space-between',
-            alignItems: isMobile ? 'flex-start' : 'flex-end',
-            gap: '24px',
-            borderBottom: '2px solid #30261D',
-            paddingBottom: '32px',
+            flexDirection: 'column',
+            gap: '22px',
+            marginBottom: '26px',
           }}
         >
-          <div>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: isCompact ? 'column' : 'row',
+              justifyContent: 'space-between',
+              alignItems: isCompact ? 'flex-start' : 'flex-end',
+              gap: '16px',
+            }}
+          >
             <h2
               style={{
                 fontFamily: "'Goudy Bookletter 1911', Georgia, serif",
                 fontWeight: 400,
-                fontSize: isMobile ? '44px' : '74px',
+                fontSize: isMobile ? '42px' : 'clamp(52px, 5.2vw, 74px)',
                 lineHeight: 0.96,
                 letterSpacing: '-0.025em',
                 color: '#30261D',
@@ -208,101 +213,54 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
             >
               Real Work. Real Coalition.
             </h2>
-          </div>
 
-          <p
-            style={{
-              fontFamily: "'Inter Tight', sans-serif",
-              fontSize: '16px',
-              lineHeight: 1.5,
-              color: '#5A4634',
-              maxWidth: '360px',
-              margin: 0,
-            }}
-          >
-            Select a client below or click any 3D monolith.
-          </p>
-        </div>
-
-        {/* Rounded Unified Stage + Tabs Shell */}
-        <motion.div
-          style={{
-            y: isCompact ? 0 : parallaxY,
-            border: '2px solid #30261D',
-            borderRadius: '26px',
-            overflow: 'hidden',
-            marginTop: '24px',
-            backgroundColor: '#231B14',
-          }}
-        >
-          {/* Client Selector Tabs */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: viewportWidth <= 640 ? 'repeat(2, 1fr)' : isCompact ? 'repeat(3, 1fr)' : 'repeat(5, 1fr)',
-              borderBottom: '2px solid #30261D',
-              backgroundColor: '#F2E7CA',
-            }}
-          >
-            {CASE_STUDIES_DATA.map((item, idx) => {
-              const isActive = idx === activeStudyIndex;
-              return (
-                <button
-                  key={item.name}
-                  type="button"
-                  onClick={() => setActiveStudyIndex(idx)}
-                  style={{
-                    padding: isMobile ? '14px 12px' : '18px 16px',
-                    border: 'none',
-                    borderRight: idx < CASE_STUDIES_DATA.length - 1 ? '1.5px solid rgba(48,38,29,0.22)' : 'none',
-                    borderBottom: isCompact ? '1.5px solid rgba(48,38,29,0.22)' : 'none',
-                    backgroundColor: isActive ? '#30261D' : 'transparent',
-                    color: isActive ? '#FFCD06' : '#30261D',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    transition: 'background-color 0.2s ease, color 0.2s ease',
-                  }}
-                >
-                  <span
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {CASE_STUDIES_DATA.map((item, idx) => {
+                const isActive = idx === activeStudyIndex;
+                return (
+                  <button
+                    key={item.name}
+                    type="button"
+                    onClick={() => setActiveStudyIndex(idx)}
                     style={{
-                      fontFamily: "'IBM Plex Mono', monospace",
-                      fontSize: '11px',
-                      opacity: isActive ? 0.9 : 0.65,
-                    }}
-                  >
-                    0{idx + 1} · {item.tag}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "'Goudy Bookletter 1911', Georgia, serif",
-                      fontSize: isMobile ? '18px' : '21px',
+                      padding: isMobile ? '8px 14px' : '10px 18px',
+                      borderRadius: '999px',
+                      border: '1.5px solid #30261D',
+                      backgroundColor: isActive ? '#30261D' : '#F2E7CA',
+                      color: isActive ? '#FFCD06' : '#30261D',
+                      fontFamily: "'Inter Tight', sans-serif",
                       fontWeight: 700,
+                      fontSize: isMobile ? '13px' : '14px',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.2s ease',
                     }}
                   >
                     {item.name}
-                  </span>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        </div>
 
-          {/* Main 3D Stage + Editorial Dossier Split */}
+        {/* Re-Imagined Gallery Showcase: Warm Matte 3D Coverflow Stage + Clean Editorial Card */}
+        <div
+          style={{
+            border: '2px solid #30261D',
+            borderRadius: '30px',
+            overflow: 'hidden',
+            backgroundColor: '#EFE3C6',
+            display: 'grid',
+            gridTemplateColumns: isCompact ? '1fr' : '1.28fr 0.72fr',
+          }}
+        >
+          {/* Left: Warm Matte 3D Photo Folio & Vinyl Coverflow */}
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: isCompact ? '1fr' : '1.15fr 0.85fr',
-              backgroundColor: '#231B14',
-            }}
-          >
-          {/* Left: Real-Time Three.js 3D Monolith Carousel */}
-          <div
-            style={{
-              height: isMobile ? '360px' : isCompact ? '440px' : '560px',
+              height: isMobile ? '370px' : isCompact ? '450px' : '540px',
               position: 'relative',
-              backgroundColor: '#231B14',
+              backgroundColor: '#EFE3C6',
               borderRight: isCompact ? 'none' : '2px solid #30261D',
               borderBottom: isCompact ? '2px solid #30261D' : 'none',
             }}
@@ -313,37 +271,78 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
               onSelect={setActiveStudyIndex}
               scrollProgress={scrollProg}
             />
+
+            {/* Tactile Round Prev/Next Stepper Buttons */}
             <div
               style={{
                 position: 'absolute',
-                left: '18px',
-                bottom: '16px',
-                fontFamily: "'IBM Plex Mono', monospace",
-                fontSize: '11px',
-                color: 'rgba(255, 205, 6, 0.88)',
-                pointerEvents: 'none',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
+                right: '18px',
+                bottom: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                zIndex: 10,
               }}
             >
-              Interactive 3D Stage · Click Any Monolith or Move Pointer
+              <button
+                type="button"
+                onClick={stepPrev}
+                aria-label="Previous client work"
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '999px',
+                  border: '1.5px solid #30261D',
+                  backgroundColor: '#FAF5E6',
+                  color: '#30261D',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={stepNext}
+                aria-label="Next client work"
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '999px',
+                  border: '1.5px solid #30261D',
+                  backgroundColor: '#FFCD06',
+                  color: '#30261D',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <ChevronRight size={18} />
+              </button>
             </div>
           </div>
 
-          {/* Right: Rounded Active Case Dossier */}
-          <div
+          {/* Right: Focused Editorial Dossier (No Redundant Photo) */}
+          <motion.div
+            key={activeData.name}
+            initial={{ opacity: 0.45, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.26 }}
             style={{
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#FAF5E6',
               color: '#30261D',
-              padding: isMobile ? '24px' : '38px',
+              padding: isMobile ? '24px 20px' : '36px 32px',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              gap: '22px',
+              gap: '24px',
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                 <BrandLogoMark brand={activeData.brand} theme="light" />
                 <span
                   style={{
@@ -351,29 +350,22 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
                     fontSize: '11px',
                     fontWeight: 700,
                     backgroundColor: '#FFCD06',
+                    border: '1px solid #30261D',
                     color: '#30261D',
                     padding: '5px 12px',
                     borderRadius: '999px',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {activeData.tag}
                 </span>
               </div>
 
-              {/* Rounded Frame Preview */}
-              <div style={{ width: '100%', height: isMobile ? '190px' : '220px', border: '1.5px solid #30261D', overflow: 'hidden', borderRadius: '18px' }}>
-                <img
-                  src={activeData.photo}
-                  alt={activeData.name}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '16px' }}
-                />
-              </div>
-
               <h3
                 style={{
                   fontFamily: "'Goudy Bookletter 1911', Georgia, serif",
-                  fontSize: isMobile ? '26px' : '32px',
-                  lineHeight: 1.12,
+                  fontSize: isMobile ? '30px' : '38px',
+                  lineHeight: 1.08,
                   color: '#30261D',
                   margin: 0,
                 }}
@@ -381,24 +373,36 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
                 {activeData.headline}
               </h3>
 
+              {activeData.description && (
+                <p
+                  style={{
+                    fontFamily: "'Inter Tight', sans-serif",
+                    fontSize: '16px',
+                    lineHeight: 1.55,
+                    color: '#5A4634',
+                    margin: 0,
+                  }}
+                >
+                  {activeData.description}
+                </p>
+              )}
+
               {/* Rounded Metric Ledger */}
               <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: viewportWidth <= 520 ? '1fr' : 'repeat(3, 1fr)',
-                  border: '1.5px solid #30261D',
-                  borderRadius: '14px',
-                  overflow: 'hidden',
-                  backgroundColor: '#FAF5E6',
+                  gap: '10px',
                 }}
               >
                 {activeData.metrics.map((metric, idx) => (
                   <div
                     key={idx}
                     style={{
-                      padding: '12px 10px',
-                      borderRight: viewportWidth > 520 && idx < 2 ? '1px solid rgba(48,38,29,0.22)' : 'none',
-                      borderBottom: viewportWidth <= 520 && idx < 2 ? '1px solid rgba(48,38,29,0.22)' : 'none',
+                      padding: '14px 12px',
+                      border: '1.5px solid #30261D',
+                      borderRadius: '16px',
+                      backgroundColor: '#F2E7CA',
                       fontFamily: "'IBM Plex Mono', monospace",
                       fontSize: '12px',
                       fontWeight: 700,
@@ -412,7 +416,18 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
             </div>
 
             {onNavigate && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingTop: '12px', borderTop: '1px solid rgba(48,38,29,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', paddingTop: '14px', borderTop: '1.5px solid rgba(48,38,29,0.2)' }}>
+                <span
+                  style={{
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: '11px',
+                    color: '#866C1D',
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                  }}
+                >
+                  0{activeStudyIndex + 1} / 0{CASE_STUDIES_DATA.length}
+                </span>
                 <button
                   type="button"
                   onClick={() => onNavigate('/work')}
@@ -421,28 +436,28 @@ const CaseStudiesGrowlio: React.FC<CaseStudiesProps> = ({ onNavigate }) => {
                     color: '#FFCD06',
                     border: '1.5px solid #30261D',
                     borderRadius: '999px',
-                    padding: '10px 20px',
+                    padding: '11px 22px',
                     fontFamily: "'Inter Tight', sans-serif",
                     fontWeight: 700,
                     fontSize: '14px',
                     cursor: 'pointer',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  View Case Study →
+                  Watch Campaign Films →
                 </button>
               </div>
             )}
-          </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
 
         {/* Rounded Client Logos Marquee Strip */}
         <div
           style={{
-            marginTop: '24px',
+            marginTop: '22px',
             border: '2px solid #30261D',
             backgroundColor: '#FFFFFF',
-            height: '74px',
+            height: '72px',
             overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
